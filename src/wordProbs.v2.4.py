@@ -309,65 +309,60 @@ def analyze(dimensions):
             resultFile = io.open(countFileName, "w", encoding = "utf-8")
             resultFile.write(dimensions[dimNum].filename[:-4] + " - " +  dimSideName  + ":\n")
             DictCopy = copy.deepcopy(dimensions[dimNum].allWords)
-            try:
-                while True:
-                    item = combinations[combNum].popitem()
-                    word = item[0]
-                    localOccurences = item[1]
-                    globalOccurences = dimensions[dimNum].allWords.get(word, 0)
-
-                    thisWordHere = localOccurences
-                    thisWordElsewhere = globalOccurences - localOccurences
-                    otherWordsHere = combinationTotals[combNum] - localOccurences
-                    otherWordsElsewhere =totalWords - thisWordHere - thisWordElsewhere - otherWordsHere
-                    contingencyTable =[[thisWordHere, thisWordElsewhere], \
-                                       [otherWordsHere, otherWordsElsewhere]]
-                    #if our sample is large enough, do chi square
-                    if get_lowest_expected(contingencyTable) > 5:
-                        chi2, prob, dof, expected = chi2_contingency(contingencyTable)
-                    #otherwise do fishers exact test
-                    else:
-                        oddsratio, prob = fisher_exact(contingencyTable)
-                        if prob >= lowFreqThreshold: 
-                            continue
-                        
-                    ratio = (localOccurences/combinationTotals[combNum])/ (globalOccurences/totalWords)
-                    
-                    if prob < highFreqThreshold:
-                        #Print the word, p value and ratio of local occurences to occurences in whole file
-                        outline = "Word: %5s \t p-value: %.4f,  ratio: %.2f  " % (word, prob, ratio)
-                        moreOutput = "( = (%d/%d) / (%d/%d)\n" % \
-                            (localOccurences,combinationTotals[combNum], globalOccurences, totalWords)
-                        resultFile.write(outline+moreOutput) 
-                    DictCopy.pop(word)
             
-            # Exit the loop since all words have been popped
-            except: 
-                pass
-
-            # Now examine the words that never appeared in the  dimension
-            try:
-                while True:
-                    item = DictCopy.popitem()
-                    word = item[0]
-                    occurences = item[1]
-                    """
-                    Contingency table: 
-                                                In Dictionary                                 In rest of File
-                    word occurences                 0                                           occurences
-                    non-word occurences    combinationTotals[combNum]           (totalWords - all other entries in table)
-                    """
-                    contingencyTable = [[0, occurences], \
-                                        [combinationTotals[combNum], totalWords]]
-                    contingencyTable[1][1] -= contingencyTable[0][1] + contingencyTable[1][0]
+            for word, localOccurences in combinations[combNum].items():
+                globalOccurences = dimensions[dimNum].allWords.get(word, 0)
+                thisWordHere = localOccurences
+                thisWordElsewhere = globalOccurences - localOccurences
+                otherWordsHere = combinationTotals[combNum] - localOccurences
+                
+                otherWordsElsewhere =totalWords - thisWordHere - thisWordElsewhere - otherWordsHere
+                contingencyTable =[[thisWordHere, thisWordElsewhere], \
+                                   [otherWordsHere, otherWordsElsewhere]]
+                
+                #if our sample is large enough, do chi square
+                if get_lowest_expected(contingencyTable) > 5:
+                    chi2, prob, dof, expected = chi2_contingency(contingencyTable)
+                #otherwise do fishers exact test
+                else:
                     oddsratio, prob = fisher_exact(contingencyTable)
-                    if prob < lowFreqThreshold:
-                        ratio = 0
-                        line = "Word: " + word + "  \tp-value: {:.4f}\tratio: {:.2f}\n"
-                        resultFile.write(line.format(prob, ratio))
-            #Once we run out, popping an element throws an error
-            except: 
-                pass
+                    if prob >= lowFreqThreshold: 
+                        continue
+                        
+                ratio = (localOccurences/combinationTotals[combNum])/ (globalOccurences/totalWords)
+                    
+                if prob < highFreqThreshold:
+                    #Print the word, p value and ratio of local occurences to occurences in whole file
+                    outline = "Word: %5s \t p-value: %.4f,  ratio: %.2f  " % (word, prob, ratio)
+                    moreOutput = "( = (%d/%d) / (%d/%d)\n" % \
+                    (localOccurences,combinationTotals[combNum], globalOccurences, totalWords)
+                    resultFile.write(outline+moreOutput) 
+                DictCopy.pop(word)
+            
+
+            #Now examine the words that never appeared in the  combination
+            for word, occurences in DictCopy.items():
+                """
+                Contingency table: 
+                                            In Dictionary                                 In rest of File
+                word occurences                 0                                           occurences
+                non-word occurences    combinationTotals[combNum]           (totalWords - all other entries in table)
+                """
+                contingencyTable = [[0, occurences], \
+                                    [combinationTotals[combNum], totalWords]]
+                contingencyTable[1][1] -= contingencyTable[0][1] + contingencyTable[1][0]
+                
+                #if our sample is large enough, do chi square
+                if get_lowest_expected(contingencyTable) > 5:
+                    chi2, prob, dof, expected = chi2_contingency(contingencyTable)
+                #otherwise do fishers exact test
+                else:
+                    oddsratio, prob = fisher_exact(contingencyTable)
+                    
+                if prob < lowFreqThreshold:
+                    ratio = 0
+                    line = "Word: " + word + "  \tp-value: {:.4f}\tratio: {:.2f}\n"
+                    resultFile.write(line.format(prob, ratio))
             #separate the dimensions with new lines and loop back to the new dimension
         resultFile.write("\n")
         resultFile.close()
@@ -431,16 +426,8 @@ def findTranscriptAgenda(agendas, name):
 
 #merge gets all the elements in dictionary B and adds them to dictionary A
 def merge(dictA, dictB):
-    try:
-        #pop all items and add them to dictionary A
-        while True:
-            item = dictB.popitem()
-            word = item[0]
-            occurences = item[1]
-            dictA[word] = dictA.get(word, 0) + occurences
-    #catch the exception when there are no more items
-    except:
-        pass
+    for word, occurences in dictB.items():
+        dictA[word] = dictA.get(word, 0) + occurences
     return dictA
 
 
